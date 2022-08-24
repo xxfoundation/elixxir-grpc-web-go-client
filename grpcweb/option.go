@@ -5,37 +5,66 @@ import (
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/encoding/proto"
 	"google.golang.org/grpc/metadata"
+	"time"
 )
 
 var (
-	defaultDialOptions = dialOptions{}
+	defaultDialOptions = DialOptions{}
 	defaultCallOptions = callOptions{
 		codec: encoding.GetCodec(proto.Name),
 	}
 )
 
-type dialOptions struct {
-	defaultCallOptions   []CallOption
-	insecure             bool
-	transportCredentials credentials.TransportCredentials
+type DialOptions struct {
+	defaultCallOptions    []CallOption
+	insecure              bool
+	transportCredentials  credentials.TransportCredentials
+	tlsCertificate        []byte
+	expectContinueTimeout time.Duration
+	idleConnTimeout       time.Duration
+	tlsHandshakeTimeout   time.Duration
 }
 
-type DialOption func(*dialOptions)
+type DialOption func(*DialOptions)
 
 func WithDefaultCallOptions(opts ...CallOption) DialOption {
-	return func(opt *dialOptions) {
+	return func(opt *DialOptions) {
 		opt.defaultCallOptions = opts
 	}
 }
 
+func WithExpectContinueTimeout(duration time.Duration) DialOption {
+	return func(opt *DialOptions) {
+		opt.expectContinueTimeout = duration
+	}
+}
+
+func WithTlsHandshakeTimeout(duration time.Duration) DialOption {
+	return func(opt *DialOptions) {
+		opt.tlsHandshakeTimeout = duration
+	}
+}
+
+func WithIdleConnTimeout(duration time.Duration) DialOption {
+	return func(opt *DialOptions) {
+		opt.idleConnTimeout = duration
+	}
+}
+
+func WithTlsCertificate(cert []byte) DialOption {
+	return func(opt *DialOptions) {
+		opt.tlsCertificate = cert
+	}
+}
+
 func WithInsecure() DialOption {
-	return func(opt *dialOptions) {
+	return func(opt *DialOptions) {
 		opt.insecure = true
 	}
 }
 
 func WithTransportCredentials(creds credentials.TransportCredentials) DialOption {
-	return func(opt *dialOptions) {
+	return func(opt *DialOptions) {
 		opt.transportCredentials = creds
 	}
 }

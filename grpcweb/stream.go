@@ -1,6 +1,7 @@
 package grpcweb
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
@@ -197,7 +198,7 @@ type ServerStream interface {
 type serverStream struct {
 	endpoint    string
 	transport   transport.UnaryTransport
-	resStream   io.ReadCloser
+	resStream   io.Reader
 	callOptions *callOptions
 
 	closed          bool
@@ -238,7 +239,7 @@ func (s *serverStream) Send(ctx context.Context, req interface{}) error {
 		return errors.Wrap(err, "failed to send the request")
 	}
 	s.header = toMetadata(header)
-	s.resStream = rawBody
+	s.resStream = bytes.NewBuffer(rawBody)
 	return nil
 }
 
@@ -251,7 +252,6 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 			if rerr := s.transport.Close(); rerr != nil {
 				err = rerr
 			}
-			s.resStream.Close()
 		}
 	}()
 

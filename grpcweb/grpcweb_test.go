@@ -23,7 +23,7 @@ type unaryTransport struct {
 
 	expectedMD metadata.MD
 	h          http.Header
-	r          io.ReadCloser
+	r          []byte
 	err        error
 }
 
@@ -31,7 +31,7 @@ func (t *unaryTransport) Header() http.Header {
 	return make(http.Header)
 }
 
-func (t *unaryTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error) {
+func (t *unaryTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		t.t.Fatalf("outgoing ctx should have metadata")
@@ -108,13 +108,18 @@ func TestInvoke(t *testing.T) {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}
 
+			rBytes, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			md := metadata.Pairs("yuko", "aioi")
 
 			injectUnaryTransport(t, &unaryTransport{
 				t:          t,
 				expectedMD: md,
 				h:          c.transportHeader,
-				r:          r,
+				r:          rBytes,
 			})
 
 			var header, trailer metadata.MD
@@ -238,13 +243,18 @@ func TestServerStream(t *testing.T) {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}
 
+			rBytes, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			md := metadata.Pairs("yuko", "aioi")
 
 			injectUnaryTransport(t, &unaryTransport{
 				t:          t,
 				expectedMD: md,
 				h:          c.transportHeader,
-				r:          r,
+				r:          rBytes,
 			})
 
 			client, err := DialContext(":50051")

@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"io/ioutil"
 	"net"
@@ -18,25 +20,31 @@ import (
 
 type UnaryTransport interface {
 	Header() http.Header
-	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error)
+	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
 	Close() error
 }
 
 type httpTransport struct {
-	host   string
-	client *http.Client
-	opts   *ConnectOptions
+	host       string
+	client     *http.Client
+	clientLock *sync.Mutex
+	opts       *ConnectOptions
 
 	header http.Header
 
 	sent bool
 }
 
+func (t *httpTransport) IsAlive() bool {
+	return true
+}
+
 func (t *httpTransport) Header() http.Header {
 	return t.header
 }
 
-func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error) {
+// NOTE: this returns byte so we can close the body here, allowing for connection to be reused
+func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
 	if t.sent {
 		return nil, nil, errors.New("Send must be called only one time per one Request")
 	}
@@ -44,11 +52,15 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		t.sent = true
 	}()
 
-	// TODO: HTTPS support.
-	scheme := "http"
+	var scheme string
+	if t.opts.WithTLS {
+		scheme = "https"
+	} else {
+		scheme = "http"
+	}
 	u := url.URL{Scheme: scheme, Host: t.host, Path: endpoint}
-	url := u.String()
-	req, err := http.NewRequest(http.MethodPost, url, body)
+	reqUrl := u.String()
+	req, err := http.NewRequest(http.MethodPost, reqUrl, body)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to build the API request")
 	}
@@ -57,23 +69,56 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	req.Header.Add("content-type", contentType)
 	req.Header.Add("x-grpc-web", "1")
 
+	t.clientLock.Lock()
+	defer t.clientLock.Unlock()
 	res, err := t.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to send the API")
 	}
 
-	return res.Header, res.Body, nil
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed to read response body")
+	}
+	err = res.Body.Close()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed to close response body")
+	}
+	return res.Header, respBody, nil
 }
 
 func (t *httpTransport) Close() error {
+	t.clientLock.Lock()
+	defer t.clientLock.Unlock()
 	t.client.CloseIdleConnections()
 	return nil
 }
 
 var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
+	cl := http.DefaultClient
+	transport := &http.Transport{}
+	if opts.WithTLS {
+		certPool := x509.NewCertPool()
+		certPool.AppendCertsFromPEM(opts.TLSCertificate)
+		transport.TLSClientConfig = &tls.Config{RootCAs: certPool}
+	}
+
+	if opts.IdleConnTimeout != 0 {
+		transport.IdleConnTimeout = opts.IdleConnTimeout
+	}
+
+	if opts.TlsHandshakeTimeout != 0 {
+		transport.TLSHandshakeTimeout = opts.TlsHandshakeTimeout
+	}
+
+	if opts.ExpectContinueTimeout != 0 {
+		transport.ExpectContinueTimeout = opts.ExpectContinueTimeout
+	}
+
+	cl.Transport = transport
 	return &httpTransport{
 		host:   host,
-		client: http.DefaultClient,
+		client: cl,
 		opts:   opts,
 		header: make(http.Header),
 	}
