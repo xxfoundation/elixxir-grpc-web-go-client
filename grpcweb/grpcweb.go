@@ -27,8 +27,9 @@ func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 		o(&opt)
 	}
 	tr := transport.NewUnary(host, &transport.ConnectOptions{
-		WithTLS:        !opt.insecure,
-		TLSCertificate: opt.tlsCertificate,
+		WithTLS:               !opt.insecure,
+		TLSCertificate:        opt.tlsCertificate,
+		TlsInsecureSkipVerify: opt.tlsInsecureVerification,
 	})
 	return &ClientConn{
 		host:        host,
@@ -47,8 +48,9 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 
 	if c.transport == nil {
 		tr := transport.NewUnary(c.host, &transport.ConnectOptions{
-			WithTLS:        !c.dialOptions.insecure,
-			TLSCertificate: c.dialOptions.tlsCertificate,
+			WithTLS:               !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification,
 		})
 		c.transport = tr
 	}

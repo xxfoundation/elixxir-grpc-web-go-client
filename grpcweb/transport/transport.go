@@ -101,6 +101,7 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 		certPool := x509.NewCertPool()
 		certPool.AppendCertsFromPEM(opts.TLSCertificate)
 		transport.TLSClientConfig = &tls.Config{RootCAs: certPool}
+		transport.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
 	}
 
 	if opts.IdleConnTimeout != 0 {

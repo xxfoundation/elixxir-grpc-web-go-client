@@ -16,13 +16,14 @@ var (
 )
 
 type DialOptions struct {
-	defaultCallOptions    []CallOption
-	insecure              bool
-	transportCredentials  credentials.TransportCredentials
-	tlsCertificate        []byte
-	expectContinueTimeout time.Duration
-	idleConnTimeout       time.Duration
-	tlsHandshakeTimeout   time.Duration
+	defaultCallOptions      []CallOption
+	insecure                bool
+	transportCredentials    credentials.TransportCredentials
+	tlsCertificate          []byte
+	tlsInsecureVerification bool
+	expectContinueTimeout   time.Duration
+	idleConnTimeout         time.Duration
+	tlsHandshakeTimeout     time.Duration
 }
 
 type DialOption func(*DialOptions)
@@ -54,6 +55,12 @@ func WithIdleConnTimeout(duration time.Duration) DialOption {
 func WithTlsCertificate(cert []byte) DialOption {
 	return func(opt *DialOptions) {
 		opt.tlsCertificate = cert
+	}
+}
+
+func WithInsecureTlsVerification() DialOption {
+	return func(opt *DialOptions) {
+		opt.tlsInsecureVerification = true
 	}
 }
 

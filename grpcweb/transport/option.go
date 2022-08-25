@@ -8,4 +8,5 @@ type ConnectOptions struct {
 	IdleConnTimeout       time.Duration
 	TlsHandshakeTimeout   time.Duration
 	ExpectContinueTimeout time.Duration
+	TlsInsecureSkipVerify bool
 }
