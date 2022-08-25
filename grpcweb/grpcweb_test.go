@@ -149,7 +149,7 @@ func TestInvoke(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, trailer); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, res); diff != "" {
+			if diff := cmp.Diff(c.expectedContent.String(), res.String()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
 			if stat.Code() != c.expectedStatus.Code() {
@@ -299,9 +299,12 @@ func TestServerStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, ress); diff != "" {
-				t.Errorf("-want, +got\n%s", diff)
+			for i := 0; i < len(c.expectedContent); i++ {
+				if diff := cmp.Diff(c.expectedContent[i].String(), ress[i].String()); diff != "" {
+					t.Errorf("-want, +got\n%s", diff)
+				}
 			}
+
 			if stat.Code() != c.expectedStatus.Code() {
 				t.Errorf("expected status code: %s, but got %s", c.expectedStatus.Code(), stat.Code())
 			}
@@ -486,7 +489,7 @@ func TestClientStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, res); diff != "" {
+			if diff := cmp.Diff(c.expectedContent.String(), res.String()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
 			if stat.Code() != c.expectedStatus.Code() {
@@ -644,8 +647,10 @@ func TestBidiStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, ress); diff != "" {
-				t.Errorf("-want, +got\n%s", diff)
+			for i := 0; i < len(c.expectedContent); i++ {
+				if diff := cmp.Diff(c.expectedContent[i].String(), ress[i].String()); diff != "" {
+					t.Errorf("-want, +got\n%s", diff)
+				}
 			}
 			if stat.Code() != c.expectedStatus.Code() {
 				t.Errorf("expected status code: %s, but got %s", c.expectedStatus.Code(), stat.Code())
