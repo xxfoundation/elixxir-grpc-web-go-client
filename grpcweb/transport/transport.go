@@ -117,10 +117,11 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 
 	cl.Transport = transport
 	return &httpTransport{
-		host:   host,
-		client: cl,
-		opts:   opts,
-		header: make(http.Header),
+		host:       host,
+		client:     cl,
+		opts:       opts,
+		header:     make(http.Header),
+		clientLock: &sync.Mutex{},
 	}
 }
 
