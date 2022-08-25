@@ -146,6 +146,9 @@ func (c *ClientConn) NewBidiStream(desc *grpc.StreamDesc, method string, opts ..
 }
 
 func (c *ClientConn) Close() error {
+	if c.transport == nil {
+		return nil
+	}
 	err := c.transport.Close()
 	if err != nil {
 		return err
