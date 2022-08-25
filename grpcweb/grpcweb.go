@@ -26,9 +26,14 @@ func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	for _, o := range opts {
 		o(&opt)
 	}
+	tr := transport.NewUnary(host, &transport.ConnectOptions{
+		WithTLS:        !opt.insecure,
+		TLSCertificate: opt.tlsCertificate,
+	})
 	return &ClientConn{
 		host:        host,
 		dialOptions: &opt,
+		transport:   tr,
 	}, nil
 }
 
