@@ -133,8 +133,12 @@ func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts 
 		return nil, errors.New("not a server stream RPC")
 	}
 	return &serverStream{
-		endpoint:    method,
-		transport:   transport.NewUnary(c.host, nil),
+		endpoint: method,
+		transport: transport.NewUnary(c.host, &transport.ConnectOptions{
+			WithTLS:               !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification,
+		}),
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }
