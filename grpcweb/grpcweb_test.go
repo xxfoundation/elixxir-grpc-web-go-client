@@ -456,7 +456,7 @@ func TestClientStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := DialContext(":50051", WithInsecure(), WithInsecureTlsVerification())
 			if err != nil {
 				t.Fatalf("DialContext should not return an error, but got '%s'", err)
 			}
@@ -601,7 +601,7 @@ func TestBidiStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := DialContext(":50051", WithInsecure())
 			if err != nil {
 				t.Fatalf("DialContext should not return an error, but got '%s'", err)
 			}

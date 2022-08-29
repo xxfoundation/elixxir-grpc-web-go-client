@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	defaultDialOptions = DialOptions{insecure: true}
+	defaultDialOptions = DialOptions{}
 	defaultCallOptions = callOptions{
 		codec: encoding.GetCodec(proto.Name),
 	}
