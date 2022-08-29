@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"io/ioutil"
 	"net"
@@ -103,13 +104,17 @@ func (t *httpTransport) Close() error {
 	return nil
 }
 
-// NewUnary returns an httpTransport object wrapped as a UnaryTransport interface
+// NewUnary returns an httpTransport object wrapped as a UnaryTransport object
 var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 	cl := http.DefaultClient
 	transport := &http.Transport{}
 	if opts.WithTLS {
 		certPool := x509.NewCertPool()
-		cert, err := x509.ParseCertificate(opts.TLSCertificate)
+		decoded, _ := pem.Decode(opts.TLSCertificate)
+		if decoded == nil {
+			panic("failed to decode cert")
+		}
+		cert, err := x509.ParseCertificate(decoded.Bytes)
 		if err != nil {
 			panic(err)
 		}
