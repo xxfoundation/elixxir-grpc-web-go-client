@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// UnaryTransport is the public interface for the transport package
 type UnaryTransport interface {
 	Header() http.Header
 	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
@@ -35,15 +36,20 @@ type httpTransport struct {
 	sent bool
 }
 
+// IsAlive is not easily defined for grpcweb, return true if t.client != nil
 func (t *httpTransport) IsAlive() bool {
-	return true
+	// No good way to check http connection status
+	// return true if client is not nil
+	return t.client != nil
 }
 
+// Header returns the http.Header object for httpTransport
 func (t *httpTransport) Header() http.Header {
 	return t.header
 }
 
-// NOTE: this returns byte so we can close the body here, allowing for connection to be reused
+// Send accepts an endpoint, content-type header & body and sends them to
+// a grpc-web server using http requests.
 func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
 	if t.sent {
 		return nil, nil, errors.New("Send must be called only one time per one Request")
@@ -87,6 +93,9 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	return res.Header, respBody, nil
 }
 
+// Close the httpTransport object
+// Note that this just closes idle connections, to properly close this
+// connection delete the object.
 func (t *httpTransport) Close() error {
 	t.clientLock.Lock()
 	defer t.clientLock.Unlock()
@@ -94,6 +103,7 @@ func (t *httpTransport) Close() error {
 	return nil
 }
 
+// NewUnary returns an httpTransport object wrapped as a UnaryTransport interface
 var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 	cl := http.DefaultClient
 	transport := &http.Transport{}

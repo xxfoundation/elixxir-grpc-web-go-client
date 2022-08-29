@@ -21,6 +21,7 @@ type ClientConn struct {
 	transport   transport.UnaryTransport
 }
 
+// DialContext initializes a grpcweb Clientconn backed by a UnaryTransport
 func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	opt := defaultDialOptions
 	for _, o := range opts {
@@ -38,10 +39,13 @@ func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	}, nil
 }
 
+// IsAlive returns true if the transport has been established
 func (c *ClientConn) IsAlive() bool {
 	return c.transport != nil
 }
 
+// Invoke uses grpcweb to call a given method with the passed in payload.
+// Response is unmarshaled to the reply interface
 func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
 	co := c.applyCallOptions(opts)
 	codec := co.codec
