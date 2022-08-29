@@ -109,8 +109,12 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 	transport := &http.Transport{}
 	if opts.WithTLS {
 		certPool := x509.NewCertPool()
-		certPool.AppendCertsFromPEM(opts.TLSCertificate)
-		transport.TLSClientConfig = &tls.Config{RootCAs: certPool}
+		cert, err := x509.ParseCertificate(opts.TLSCertificate)
+		if err != nil {
+			panic(err)
+		}
+		certPool.AddCert(cert)
+		transport.TLSClientConfig = &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
 		transport.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
 	}
 
