@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
+	"git.xx.network/elixxir/grpc-web-go-client/grpcweb/parser"
+	"git.xx.network/elixxir/grpc-web-go-client/grpcweb/transport"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
@@ -17,26 +17,47 @@ import (
 
 type ClientConn struct {
 	host        string
-	dialOptions *dialOptions
+	dialOptions *DialOptions
+	transport   transport.UnaryTransport
 }
 
+// DialContext initializes a grpcweb Clientconn backed by a UnaryTransport
 func DialContext(host string, opts ...DialOption) (*ClientConn, error) {
 	opt := defaultDialOptions
 	for _, o := range opts {
 		o(&opt)
 	}
+	tr := transport.NewUnary(host, &transport.ConnectOptions{
+		WithTLS:               !opt.insecure,
+		TLSCertificate:        opt.tlsCertificate,
+		TlsInsecureSkipVerify: opt.tlsInsecureVerification,
+	})
 	return &ClientConn{
 		host:        host,
 		dialOptions: &opt,
+		transport:   tr,
 	}, nil
 }
 
-func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
-	callOptions := c.applyCallOptions(opts)
-	codec := callOptions.codec
+// IsAlive returns true if the transport has been established
+func (c *ClientConn) IsAlive() bool {
+	return c.transport != nil
+}
 
-	tr := transport.NewUnary(c.host, nil)
-	defer tr.Close()
+// Invoke uses grpcweb to call a given method with the passed in payload.
+// Response is unmarshaled to the reply interface
+func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
+	co := c.applyCallOptions(opts)
+	codec := co.codec
+
+	if c.transport == nil {
+		tr := transport.NewUnary(c.host, &transport.ConnectOptions{
+			WithTLS:               !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification,
+		})
+		c.transport = tr
+	}
 
 	r, err := encodeRequestBody(codec, args)
 	if err != nil {
@@ -47,29 +68,28 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 	if ok {
 		for k, v := range md {
 			for _, vv := range v {
-				tr.Header().Add(k, vv)
+				c.transport.Header().Add(k, vv)
 			}
 		}
 	}
 
 	contentType := "application/grpc-web+" + codec.Name()
-	header, rawBody, err := tr.Send(ctx, method, contentType, r)
+	header, rawBody, err := c.transport.Send(ctx, method, contentType, r)
 	if err != nil {
 		return errors.Wrap(err, "failed to send the request")
 	}
-	defer rawBody.Close()
 
-	if callOptions.header != nil {
-		*callOptions.header = toMetadata(header)
+	if co.header != nil {
+		*co.header = toMetadata(header)
 	}
-
-	resHeader, err := parser.ParseResponseHeader(rawBody)
+	bodyReader := bytes.NewReader(rawBody)
+	resHeader, err := parser.ParseResponseHeader(bodyReader)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse response header")
 	}
 
 	if resHeader.IsMessageHeader() {
-		resBody, err := parser.ParseLengthPrefixedMessage(rawBody, resHeader.ContentLength)
+		resBody, err := parser.ParseLengthPrefixedMessage(bodyReader, resHeader.ContentLength)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse the response body")
 		}
@@ -77,7 +97,7 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 			return errors.Wrapf(err, "failed to unmarshal response body by codec %s", codec.Name())
 		}
 
-		resHeader, err = parser.ParseResponseHeader(rawBody)
+		resHeader, err = parser.ParseResponseHeader(bodyReader)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse response header")
 		}
@@ -86,12 +106,12 @@ func (c *ClientConn) Invoke(ctx context.Context, method string, args, reply inte
 		return errors.New("unexpected header")
 	}
 
-	status, trailer, err := parser.ParseStatusAndTrailer(rawBody, resHeader.ContentLength)
+	status, trailer, err := parser.ParseStatusAndTrailer(bodyReader, resHeader.ContentLength)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse status and trailer")
 	}
-	if callOptions.trailer != nil {
-		*callOptions.trailer = trailer
+	if co.trailer != nil {
+		*co.trailer = trailer
 	}
 
 	return status.Err()
@@ -117,8 +137,12 @@ func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts 
 		return nil, errors.New("not a server stream RPC")
 	}
 	return &serverStream{
-		endpoint:    method,
-		transport:   transport.NewUnary(c.host, nil),
+		endpoint: method,
+		transport: transport.NewUnary(c.host, &transport.ConnectOptions{
+			WithTLS:               !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification,
+		}),
 		callOptions: c.applyCallOptions(opts),
 	}, nil
 }
@@ -134,6 +158,18 @@ func (c *ClientConn) NewBidiStream(desc *grpc.StreamDesc, method string, opts ..
 	return &bidiStream{
 		clientStream: stream.(*clientStream),
 	}, nil
+}
+
+func (c *ClientConn) Close() error {
+	if c.transport == nil {
+		return nil
+	}
+	err := c.transport.Close()
+	if err != nil {
+		return err
+	}
+	c.transport = nil
+	return nil
 }
 
 func (c *ClientConn) applyCallOptions(opts []CallOption) *callOptions {

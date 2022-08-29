@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"io/ioutil"
 	"net"
@@ -16,27 +19,39 @@ import (
 	"github.com/pkg/errors"
 )
 
+// UnaryTransport is the public interface for the transport package
 type UnaryTransport interface {
 	Header() http.Header
-	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error)
+	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
 	Close() error
 }
 
 type httpTransport struct {
-	host   string
-	client *http.Client
-	opts   *ConnectOptions
+	host       string
+	client     *http.Client
+	clientLock *sync.Mutex
+	opts       *ConnectOptions
 
 	header http.Header
 
 	sent bool
 }
 
+// IsAlive is not easily defined for grpcweb, return true if t.client != nil
+func (t *httpTransport) IsAlive() bool {
+	// No good way to check http connection status
+	// return true if client is not nil
+	return t.client != nil
+}
+
+// Header returns the http.Header object for httpTransport
 func (t *httpTransport) Header() http.Header {
 	return t.header
 }
 
-func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error) {
+// Send accepts an endpoint, content-type header & body and sends them to
+// a grpc-web server using http requests.
+func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
 	if t.sent {
 		return nil, nil, errors.New("Send must be called only one time per one Request")
 	}
@@ -44,11 +59,15 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		t.sent = true
 	}()
 
-	// TODO: HTTPS support.
-	scheme := "http"
+	var scheme string
+	if t.opts.WithTLS {
+		scheme = "https"
+	} else {
+		scheme = "http"
+	}
 	u := url.URL{Scheme: scheme, Host: t.host, Path: endpoint}
-	url := u.String()
-	req, err := http.NewRequest(http.MethodPost, url, body)
+	reqUrl := u.String()
+	req, err := http.NewRequest(http.MethodPost, reqUrl, body)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to build the API request")
 	}
@@ -57,25 +76,72 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	req.Header.Add("content-type", contentType)
 	req.Header.Add("x-grpc-web", "1")
 
+	t.clientLock.Lock()
+	defer t.clientLock.Unlock()
 	res, err := t.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to send the API")
 	}
 
-	return res.Header, res.Body, nil
+	respBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed to read response body")
+	}
+	err = res.Body.Close()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Failed to close response body")
+	}
+	return res.Header, respBody, nil
 }
 
+// Close the httpTransport object
+// Note that this just closes idle connections, to properly close this
+// connection delete the object.
 func (t *httpTransport) Close() error {
+	t.clientLock.Lock()
+	defer t.clientLock.Unlock()
 	t.client.CloseIdleConnections()
 	return nil
 }
 
+// NewUnary returns an httpTransport object wrapped as a UnaryTransport object
 var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
+	cl := http.DefaultClient
+	transport := &http.Transport{}
+	if opts.WithTLS {
+		certPool := x509.NewCertPool()
+		decoded, _ := pem.Decode(opts.TLSCertificate)
+		if decoded == nil {
+			panic("failed to decode cert")
+		}
+		cert, err := x509.ParseCertificate(decoded.Bytes)
+		if err != nil {
+			panic(err)
+		}
+		certPool.AddCert(cert)
+		transport.TLSClientConfig = &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
+		transport.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
+	}
+
+	if opts.IdleConnTimeout != 0 {
+		transport.IdleConnTimeout = opts.IdleConnTimeout
+	}
+
+	if opts.TlsHandshakeTimeout != 0 {
+		transport.TLSHandshakeTimeout = opts.TlsHandshakeTimeout
+	}
+
+	if opts.ExpectContinueTimeout != 0 {
+		transport.ExpectContinueTimeout = opts.ExpectContinueTimeout
+	}
+
+	cl.Transport = transport
 	return &httpTransport{
-		host:   host,
-		client: http.DefaultClient,
-		opts:   opts,
-		header: make(http.Header),
+		host:       host,
+		client:     cl,
+		opts:       opts,
+		header:     make(http.Header),
+		clientLock: &sync.Mutex{},
 	}
 }
 

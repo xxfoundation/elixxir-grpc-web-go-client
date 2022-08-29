@@ -1,16 +1,22 @@
-module github.com/ktr0731/grpc-web-go-client
+module git.xx.network/elixxir/grpc-web-go-client
+
+go 1.17
 
 require (
-	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
-	github.com/google/go-cmp v0.4.0
-	github.com/gorilla/websocket v1.4.1
-	github.com/ktr0731/grpc-test v0.1.4
+	github.com/golang/protobuf v1.5.2
+	github.com/google/go-cmp v0.5.8
+	github.com/gorilla/websocket v1.5.0
+	github.com/ktr0731/grpc-test v0.1.12
+	github.com/ktr0731/grpc-web-go-client v0.2.8
 	github.com/pkg/errors v0.9.1
-	go.uber.org/atomic v1.6.0
-	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
-	google.golang.org/genproto v0.0.0-20200204235621-fb4a7afc5178
-	google.golang.org/grpc v1.27.1
-	google.golang.org/protobuf v1.21.0
+	go.uber.org/atomic v1.10.0
+	golang.org/x/net v0.0.0-20220822230855-b0a4917ee28c
+	google.golang.org/genproto v0.0.0-20220822174746-9e6da59bd2fc
+	google.golang.org/grpc v1.49.0
+	google.golang.org/protobuf v1.28.1
 )
 
-go 1.13
+require (
+	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	golang.org/x/text v0.3.7 // indirect
+)

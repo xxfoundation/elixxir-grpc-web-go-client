@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"git.xx.network/elixxir/grpc-web-go-client/grpcweb/transport"
 	"github.com/google/go-cmp/cmp"
 	"github.com/ktr0731/grpc-test/api"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/transport"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -23,7 +23,7 @@ type unaryTransport struct {
 
 	expectedMD metadata.MD
 	h          http.Header
-	r          io.ReadCloser
+	r          []byte
 	err        error
 }
 
@@ -31,7 +31,7 @@ func (t *unaryTransport) Header() http.Header {
 	return make(http.Header)
 }
 
-func (t *unaryTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, io.ReadCloser, error) {
+func (t *unaryTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		t.t.Fatalf("outgoing ctx should have metadata")
@@ -108,13 +108,18 @@ func TestInvoke(t *testing.T) {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}
 
+			rBytes, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			md := metadata.Pairs("yuko", "aioi")
 
 			injectUnaryTransport(t, &unaryTransport{
 				t:          t,
 				expectedMD: md,
 				h:          c.transportHeader,
-				r:          r,
+				r:          rBytes,
 			})
 
 			var header, trailer metadata.MD
@@ -144,7 +149,7 @@ func TestInvoke(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, trailer); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, res); diff != "" {
+			if diff := cmp.Diff(c.expectedContent.String(), res.String()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
 			if stat.Code() != c.expectedStatus.Code() {
@@ -238,13 +243,18 @@ func TestServerStream(t *testing.T) {
 				t.Fatalf("Open should not return an error, but got '%s'", err)
 			}
 
+			rBytes, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			md := metadata.Pairs("yuko", "aioi")
 
 			injectUnaryTransport(t, &unaryTransport{
 				t:          t,
 				expectedMD: md,
 				h:          c.transportHeader,
-				r:          r,
+				r:          rBytes,
 			})
 
 			client, err := DialContext(":50051")
@@ -289,9 +299,12 @@ func TestServerStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, ress); diff != "" {
-				t.Errorf("-want, +got\n%s", diff)
+			for i := 0; i < len(c.expectedContent); i++ {
+				if diff := cmp.Diff(c.expectedContent[i].String(), ress[i].String()); diff != "" {
+					t.Errorf("-want, +got\n%s", diff)
+				}
 			}
+
 			if stat.Code() != c.expectedStatus.Code() {
 				t.Errorf("expected status code: %s, but got %s", c.expectedStatus.Code(), stat.Code())
 			}
@@ -443,7 +456,7 @@ func TestClientStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := DialContext(":50051", WithInsecure(), WithInsecureTlsVerification())
 			if err != nil {
 				t.Fatalf("DialContext should not return an error, but got '%s'", err)
 			}
@@ -476,7 +489,7 @@ func TestClientStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, res); diff != "" {
+			if diff := cmp.Diff(c.expectedContent.String(), res.String()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
 			if stat.Code() != c.expectedStatus.Code() {
@@ -588,7 +601,7 @@ func TestBidiStream(t *testing.T) {
 				err:            c.transportErr,
 			})
 
-			client, err := DialContext(":50051")
+			client, err := DialContext(":50051", WithInsecure())
 			if err != nil {
 				t.Fatalf("DialContext should not return an error, but got '%s'", err)
 			}
@@ -634,8 +647,10 @@ func TestBidiStream(t *testing.T) {
 			if diff := cmp.Diff(c.expectedTrailer, stm.Trailer()); diff != "" {
 				t.Errorf("-want, +got\n%s", diff)
 			}
-			if diff := cmp.Diff(c.expectedContent, ress); diff != "" {
-				t.Errorf("-want, +got\n%s", diff)
+			for i := 0; i < len(c.expectedContent); i++ {
+				if diff := cmp.Diff(c.expectedContent[i].String(), ress[i].String()); diff != "" {
+					t.Errorf("-want, +got\n%s", diff)
+				}
 			}
 			if stat.Code() != c.expectedStatus.Code() {
 				t.Errorf("expected status code: %s, but got %s", c.expectedStatus.Code(), stat.Code())
