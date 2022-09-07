@@ -52,13 +52,6 @@ func (t *httpTransport) Header() http.Header {
 // Send accepts an endpoint, content-type header & body and sends them to
 // a grpc-web server using http requests.
 func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error) {
-	if t.sent {
-		return nil, nil, errors.New("Send must be called only one time per one Request")
-	}
-	defer func() {
-		t.sent = true
-	}()
-
 	var scheme string
 	if t.opts.WithTLS {
 		scheme = "https"
