@@ -33,8 +33,6 @@ type httpTransport struct {
 	opts       *ConnectOptions
 
 	header http.Header
-
-	sent bool
 }
 
 // IsAlive is not easily defined for grpcweb, return true if t.client != nil
@@ -80,6 +78,7 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Failed to read response body")
 	}
+	res.Close = true
 	err = res.Body.Close()
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Failed to close response body")
