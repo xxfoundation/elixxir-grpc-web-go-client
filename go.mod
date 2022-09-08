@@ -9,6 +9,7 @@ require (
 	github.com/ktr0731/grpc-test v0.1.12
 	github.com/ktr0731/grpc-web-go-client v0.2.8
 	github.com/pkg/errors v0.9.1
+	github.com/spf13/jwalterweatherman v1.1.0
 	go.uber.org/atomic v1.10.0
 	golang.org/x/net v0.0.0-20220822230855-b0a4917ee28c
 	google.golang.org/genproto v0.0.0-20220822174746-9e6da59bd2fc

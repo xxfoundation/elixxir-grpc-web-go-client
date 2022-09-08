@@ -7,16 +7,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
+	jww "github.com/spf13/jwalterweatherman"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/gorilla/websocket"
-	"github.com/pkg/errors"
 )
 
 // UnaryTransport is the public interface for the transport package
@@ -83,6 +84,17 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Failed to close response body")
 	}
+
+	if grpcStatus := res.Header.Get("grpc-status"); grpcStatus != "" {
+		grpcStatusInt, err := strconv.Atoi(res.Header.Get("grpc-status"))
+		if err != nil {
+			jww.WARN.Printf("Invalid GRPC status header: %+v", err)
+		} else if grpcStatusInt > 0 {
+			jww.WARN.Printf("received GRPC status code %d: %s",
+				grpcStatusInt, res.Header.Get("grpc-message"))
+		}
+	}
+
 	return res.Header, respBody, nil
 }
 
