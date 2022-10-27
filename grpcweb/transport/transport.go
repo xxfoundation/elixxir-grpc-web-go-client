@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // UnaryTransport is the public interface for the transport package
@@ -30,7 +31,7 @@ type UnaryTransport interface {
 type httpTransport struct {
 	host       string
 	client     *http.Client
-	clientLock *sync.Mutex
+	clientLock *sync.RWMutex
 	opts       *ConnectOptions
 
 	header http.Header
@@ -68,8 +69,8 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	req.Header.Add("content-type", contentType)
 	req.Header.Add("x-grpc-web", "1")
 
-	t.clientLock.Lock()
-	defer t.clientLock.Unlock()
+	t.clientLock.RLock()
+	defer t.clientLock.RUnlock()
 	res, err := t.client.Do(req)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to send the API")
@@ -126,6 +127,11 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 		transport.TLSClientConfig = &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
 		transport.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
 	}
+	if opts.Timeout != 0 {
+		cl.Timeout = time.Second
+	} else {
+		cl.Timeout = opts.Timeout
+	}
 
 	if opts.IdleConnTimeout != 0 {
 		transport.IdleConnTimeout = opts.IdleConnTimeout
@@ -145,7 +151,7 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 		client:     cl,
 		opts:       opts,
 		header:     make(http.Header),
-		clientLock: &sync.Mutex{},
+		clientLock: &sync.RWMutex{},
 	}
 }
 

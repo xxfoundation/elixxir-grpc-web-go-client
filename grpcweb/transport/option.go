@@ -22,4 +22,6 @@ type ConnectOptions struct {
 	ExpectContinueTimeout time.Duration
 	// Skip standard tls certificate verifications
 	TlsInsecureSkipVerify bool
+
+	Timeout time.Duration
 }
