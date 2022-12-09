@@ -341,12 +341,29 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 	return t.conn.WriteMessage(msg, b)
 }
 
-var NewClientStream = func(host, endpoint string) (ClientStreamTransport, error) {
+var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientStreamTransport, error) {
 	// TODO: WebSocket over TLS support.
-	u := url.URL{Scheme: "ws", Host: host, Path: endpoint}
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
+	dialer := websocket.DefaultDialer
+	scheme := "ws"
+	if opts.WithTLS {
+		scheme = "wss"
+		certPool := x509.NewCertPool()
+		decoded, _ := pem.Decode(opts.TLSCertificate)
+		if decoded == nil {
+			panic("failed to decode cert")
+		}
+		cert, err := x509.ParseCertificate(decoded.Bytes)
+		if err != nil {
+			panic(err)
+		}
+		certPool.AddCert(cert)
+		dialer.TLSClientConfig = &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
+		dialer.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
+	}
+	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
 	conn, _, err := websocket.DefaultDialer.Dial(u.String(), h)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to dial to '%s'", u.String())

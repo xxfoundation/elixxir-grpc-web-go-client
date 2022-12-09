@@ -121,14 +121,15 @@ func (c *ClientConn) NewClientStream(desc *grpc.StreamDesc, method string, opts 
 	if !desc.ClientStreams {
 		return nil, errors.New("not a client stream RPC")
 	}
-	tr, err := transport.NewClientStream(c.host, method)
+	co := c.applyCallOptions(opts)
+	tr, err := transport.NewClientStream(c.host, method, &transport.ConnectOptions{WithTLS: !c.dialOptions.insecure})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new transport stream")
 	}
 	return &clientStream{
 		endpoint:    method,
 		transport:   tr,
-		callOptions: c.applyCallOptions(opts),
+		callOptions: co,
 	}, nil
 }
 
