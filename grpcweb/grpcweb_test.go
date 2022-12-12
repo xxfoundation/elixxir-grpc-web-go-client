@@ -667,7 +667,7 @@ func injectClientStreamTransport(t *testing.T, tr transport.ClientStreamTranspor
 	t.Cleanup(func() {
 		transport.NewClientStream = old
 	})
-	transport.NewClientStream = func(string, string) (transport.ClientStreamTransport, error) {
+	transport.NewClientStream = func(string, string, *transport.ConnectOptions) (transport.ClientStreamTransport, error) {
 		return tr, nil
 	}
 }

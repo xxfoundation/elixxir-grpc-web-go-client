@@ -4,22 +4,20 @@ go 1.17
 
 require (
 	github.com/golang/protobuf v1.5.2
-	github.com/google/go-cmp v0.5.8
-	github.com/gorilla/websocket v1.5.0
+	github.com/google/go-cmp v0.5.9
 	github.com/ktr0731/grpc-test v0.1.12
-	github.com/ktr0731/grpc-web-go-client v0.2.8
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/jwalterweatherman v1.1.0
 	go.uber.org/atomic v1.10.0
-	golang.org/x/net v0.0.0-20220822230855-b0a4917ee28c
-	google.golang.org/genproto v0.0.0-20220822174746-9e6da59bd2fc
-	google.golang.org/grpc v1.49.0
+	golang.org/x/net v0.4.0
+	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37
+	google.golang.org/grpc v1.51.0
 	google.golang.org/protobuf v1.28.1
+	nhooyr.io/websocket v1.8.7
 )
 
 require (
-	github.com/stretchr/testify v1.7.0 // indirect
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
-	golang.org/x/text v0.3.7 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	github.com/klauspost/compress v1.11.7 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 )

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"git.xx.network/elixxir/grpc-web-go-client/grpcweb/parser"
 	"github.com/google/go-cmp/cmp"
-	"github.com/ktr0731/grpc-web-go-client/grpcweb/parser"
 	"github.com/pkg/errors"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
@@ -46,7 +46,7 @@ func TestParseResponseHeader(t *testing.T) {
 			expectedErr: io.ErrUnexpectedEOF,
 		},
 		"the length is zero": {
-			in:          []byte{0x00, 0x00, 0x00, 0x00, 0x00},
+			in:          []byte{},
 			wantErr:     true,
 			expectedErr: io.EOF,
 		},

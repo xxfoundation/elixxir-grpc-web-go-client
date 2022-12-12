@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"nhooyr.io/websocket"
 	"strconv"
 	"strings"
 	"sync"
@@ -222,7 +222,7 @@ func (t *webSocketTransport) Send(ctx context.Context, body io.Reader) error {
 		var b bytes.Buffer
 		h.Write(&b)
 
-		t.writeMessage(websocket.BinaryMessage, b.Bytes())
+		t.writeMessage(int(websocket.MessageBinary), b.Bytes())
 	})
 	if err != nil {
 		return err
@@ -235,7 +235,7 @@ func (t *webSocketTransport) Send(ctx context.Context, body io.Reader) error {
 		return errors.Wrap(err, "failed to read request body")
 	}
 
-	return t.writeMessage(websocket.BinaryMessage, b.Bytes())
+	return t.writeMessage(int(websocket.MessageBinary), b.Bytes())
 }
 
 func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err error) {
@@ -255,13 +255,14 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 
 	// skip response header
 	t.resOnce.Do(func() {
-		_, _, err = t.conn.NextReader()
+		ctx := context.Background()
+		_, _, err = t.conn.Reader(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "failed to read response header")
 			return
 		}
 
-		_, msg, err := t.conn.NextReader()
+		_, msg, err := t.conn.Reader(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "failed to read response header")
 			return
@@ -284,13 +285,13 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 	var buf bytes.Buffer
 	var b []byte
 
-	_, b, err = t.conn.ReadMessage()
+	_, b, err = t.conn.Read(context.Background())
 	if err != nil {
 		if cerr, ok := err.(*websocket.CloseError); ok {
-			if cerr.Code == websocket.CloseNormalClosure {
+			if cerr.Code == websocket.StatusNormalClosure {
 				return nil, io.EOF
 			}
-			if cerr.Code == websocket.CloseAbnormalClosure {
+			if cerr.Code == websocket.StatusAbnormalClosure {
 				return nil, io.ErrUnexpectedEOF
 			}
 		}
@@ -300,7 +301,7 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 	buf.Write(b)
 
 	var r io.Reader
-	_, r, err = t.conn.NextReader()
+	_, r, err = t.conn.Reader(context.Background())
 	if err != nil {
 		return
 	}
@@ -320,25 +321,26 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 func (t *webSocketTransport) CloseSend() error {
 	// 0x01 means the finish send frame.
 	// ref. transports/websocket/websocket.ts
-	t.writeMessage(websocket.BinaryMessage, []byte{0x01})
+	t.writeMessage(int(websocket.MessageBinary), []byte{0x01})
 	return nil
 }
 
 func (t *webSocketTransport) Close() error {
 	// Send the close message.
-	err := t.writeMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+
+	err := t.conn.Close(websocket.StatusNormalClosure, "")
 	if err != nil {
 		return err
 	}
 	t.closed = true
 	// Close the WebSocket connection.
-	return t.conn.Close()
+	return nil
 }
 
 func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 	t.writeMu.Lock()
 	defer t.writeMu.Unlock()
-	return t.conn.WriteMessage(msg, b)
+	return t.conn.Write(context.Background(), websocket.MessageType(msg), b)
 }
 
 var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientStreamTransport, error) {
@@ -346,7 +348,8 @@ var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientS
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
-	dialer := websocket.DefaultDialer
+	dialer := &websocket.DialOptions{}
+	dialer.HTTPClient = http.DefaultClient
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
@@ -360,11 +363,16 @@ var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientS
 			panic(err)
 		}
 		certPool.AddCert(cert)
-		dialer.TLSClientConfig = &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
-		dialer.TLSClientConfig.InsecureSkipVerify = opts.TlsInsecureSkipVerify
+		tlsConf := &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
+		tlsConf.InsecureSkipVerify = opts.TlsInsecureSkipVerify
+
+		dialer.HTTPClient.Transport = &http.Transport{
+			TLSClientConfig: tlsConf,
+		}
+
 	}
 	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), h)
+	conn, _, err := websocket.Dial(context.Background(), u.String(), dialer)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to dial to '%s'", u.String())
 	}

@@ -3,7 +3,7 @@ package grpcweb_reflection_v1alpha
 import (
 	"errors"
 
-	"github.com/ktr0731/grpc-web-go-client/grpcweb"
+	"git.xx.network/elixxir/grpc-web-go-client/grpcweb"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 	pb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
