@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"git.xx.network/elixxir/grpc-web-go-client/grpcweb/parser"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"nhooyr.io/websocket"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -86,6 +86,10 @@ func (t *webSocketUnaryTransport) Send(ctx context.Context, _, _ string, body io
 		return nil, nil, errors.Wrap(err, "failed to read request body")
 	}
 
+	t.writeMessage(int(websocket.MessageBinary), b.Bytes())
+
+	t.CloseSend()
+
 	rc, err := t.Receive(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -96,13 +100,21 @@ func (t *webSocketUnaryTransport) Send(ctx context.Context, _, _ string, body io
 		return nil, nil, err
 	}
 
-	msgH, err := parser.ParseResponseHeader(rc)
+	msgBytes, err := ioutil.ReadAll(rc)
 	if err != nil {
 		return nil, nil, err
 	}
-	msg, err := parser.ParseLengthPrefixedMessage(rc, msgH.ContentLength)
 
-	return h, msg, t.writeMessage(int(websocket.MessageBinary), b.Bytes())
+	//msgH, err := parser.ParseResponseHeader(rc)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//msg, err := parser.ParseLengthPrefixedMessage(rc, msgH.ContentLength)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+
+	return h, msgBytes, nil
 }
 
 func (t *webSocketUnaryTransport) Receive(context.Context) (_ io.ReadCloser, err error) {
@@ -123,7 +135,7 @@ func (t *webSocketUnaryTransport) Receive(context.Context) (_ io.ReadCloser, err
 	// skip response header
 	t.resOnce.Do(func() {
 		ctx := context.Background()
-		_, _, err = t.conn.Reader(ctx)
+		_, _, err = t.conn.Read(ctx)
 		if err != nil {
 			err = errors.Wrap(err, "failed to read response header")
 			return
@@ -152,37 +164,52 @@ func (t *webSocketUnaryTransport) Receive(context.Context) (_ io.ReadCloser, err
 	var buf bytes.Buffer
 	var b []byte
 
-	_, b, err = t.conn.Read(context.Background())
-	if err != nil {
-		if cerr, ok := err.(*websocket.CloseError); ok {
-			if cerr.Code == websocket.StatusNormalClosure {
-				return nil, io.EOF
-			}
-			if cerr.Code == websocket.StatusAbnormalClosure {
-				return nil, io.ErrUnexpectedEOF
-			}
+	numChunks := 1
+	if t.header != nil {
+		numChunkStr := t.header.Get("Totalchunks")
+		numChunks, err = strconv.Atoi(numChunkStr)
+		if err != nil {
+			numChunks = 1
 		}
-		err = errors.Wrap(err, "failed to read response body")
-		return
-	}
-	buf.Write(b)
-
-	var r io.Reader
-	_, r, err = t.conn.Reader(context.Background())
-	if err != nil {
-		return
 	}
 
-	res := ioutil.NopCloser(io.MultiReader(&buf, r))
+	fullMsg := bytes.NewBuffer(nil)
 
-	by, err := ioutil.ReadAll(res)
-	if err != nil {
-		panic(err)
+	for i := 0; i < numChunks; i++ {
+		_, b, err = t.conn.Read(context.Background())
+		if err != nil {
+			if cerr, ok := err.(*websocket.CloseError); ok {
+				if cerr.Code == websocket.StatusNormalClosure {
+					return nil, io.EOF
+				}
+				if cerr.Code == websocket.StatusAbnormalClosure {
+					return nil, io.ErrUnexpectedEOF
+				}
+			}
+			err = errors.Wrap(err, "failed to read response body")
+			return
+		}
+		buf.Write(b)
+
+		var r io.Reader
+		_, r, err = t.conn.Reader(context.Background())
+		if err != nil {
+			return
+		}
+
+		res := ioutil.NopCloser(io.MultiReader(&buf, r))
+
+		by, err := ioutil.ReadAll(res)
+		if err != nil {
+			panic(err)
+		}
+
+		res = ioutil.NopCloser(bytes.NewReader(by))
+
+		fullMsg.Write(by)
 	}
+	return ioutil.NopCloser(fullMsg), nil
 
-	res = ioutil.NopCloser(bytes.NewReader(by))
-
-	return res, nil
 }
 
 func (t *webSocketUnaryTransport) CloseSend() error {
@@ -194,6 +221,9 @@ func (t *webSocketUnaryTransport) CloseSend() error {
 
 func (t *webSocketUnaryTransport) Close() error {
 	// Send the close message.
+	if t.closed {
+		return nil
+	}
 
 	err := t.conn.Close(websocket.StatusNormalClosure, "")
 	if err != nil {
@@ -217,6 +247,8 @@ var NewWSUT = func(host, endpoint string, opts *ConnectOptions) (UnaryTransport,
 	var conn *websocket.Conn
 	dialer := &websocket.DialOptions{}
 	dialer.HTTPClient = http.DefaultClient
+	dialer.HTTPHeader = h
+	dialer.Subprotocols = []string{"grpc-websockets"}
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
