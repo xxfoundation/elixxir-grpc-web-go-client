@@ -58,6 +58,13 @@ func WithTlsCertificate(cert []byte) DialOption {
 	}
 }
 
+func WithSecure() DialOption {
+	return func(opt *DialOptions) {
+		opt.insecure = false
+		opt.tlsInsecureVerification = false
+	}
+}
+
 func WithInsecureTlsVerification() DialOption {
 	return func(opt *DialOptions) {
 		opt.tlsInsecureVerification = true
