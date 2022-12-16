@@ -1,7 +1,7 @@
 package grpcweb
 
 import (
-	"bytes"
+	//"bytes"
 	"context"
 	"encoding/binary"
 	"io"
@@ -197,7 +197,7 @@ type ServerStream interface {
 
 type serverStream struct {
 	endpoint    string
-	transport   transport.UnaryTransport
+	transport   transport.ClientStreamTransport
 	resStream   io.Reader
 	callOptions *callOptions
 
@@ -206,7 +206,15 @@ type serverStream struct {
 }
 
 func (s *serverStream) Header() (metadata.MD, error) {
-	return s.header, nil
+	md := metadata.New(nil)
+	headers, err := s.transport.Header()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get headers")
+	}
+	for k, v := range headers {
+		md.Append(k, v...)
+	}
+	return md, err
 }
 
 func (s *serverStream) Trailer() metadata.MD {
@@ -224,29 +232,29 @@ func (s *serverStream) Send(ctx context.Context, req interface{}) error {
 		return errors.Wrap(err, "failed to build the request body")
 	}
 
+	h := http.Header{}
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if ok {
 		for k, v := range md {
 			for _, vv := range v {
-				s.transport.Header().Add(k, vv)
+				h.Add(k, vv)
 			}
 		}
 	}
+	s.transport.SetRequestHeader(h)
 
-	contentType := "application/grpc-web+" + codec.Name()
-	header, rawBody, err := s.transport.Send(ctx, s.endpoint, contentType, r)
+	err = s.transport.Send(ctx, r)
 	if err != nil {
 		return errors.Wrap(err, "failed to send the request")
 	}
-	s.header = toMetadata(header)
-	s.resStream = bytes.NewBuffer(rawBody)
-	return nil
+
+	return s.transport.CloseSend()
 }
 
 func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error) {
-	if s.resStream == nil {
-		return errors.New("Receive must be call after calling Send")
-	}
+	//if s.resStream == nil {
+	//	return errors.New("Receive must be call after calling Send")
+	//}
 	defer func() {
 		if err == io.EOF {
 			if rerr := s.transport.Close(); rerr != nil {
@@ -255,8 +263,12 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 		}
 	}()
 
+	resStream, err := s.transport.Receive(ctx)
+	if err != nil {
+		return err
+	}
 	var h [5]byte
-	n, err := s.resStream.Read(h[:])
+	n, err := resStream.Read(h[:])
 	if err != nil {
 		return err
 	}
@@ -270,7 +282,7 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 		return io.EOF
 	}
 	if flag == 0 || flag == 1 { // Message header.
-		msg, err := parser.ParseLengthPrefixedMessage(s.resStream, length)
+		msg, err := parser.ParseLengthPrefixedMessage(resStream, length)
 		if err != nil {
 			return err
 		}
@@ -280,7 +292,7 @@ func (s *serverStream) Receive(ctx context.Context, res interface{}) (err error)
 		return nil
 	}
 
-	status, trailer, err := parser.ParseStatusAndTrailer(s.resStream, length)
+	status, trailer, err := parser.ParseStatusAndTrailer(resStream, length)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse trailer")
 	}

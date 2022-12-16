@@ -196,9 +196,16 @@ type webSocketTransport struct {
 	writeMu sync.Mutex
 
 	reqHeader, header, trailer http.Header
+	receiveHeaderErr           error
 }
 
 func (t *webSocketTransport) Header() (http.Header, error) {
+	if t.header == nil {
+		t.resOnce.Do(t.receiveHeaders)
+	}
+	if t.receiveHeaderErr != nil {
+		return nil, t.receiveHeaderErr
+	}
 	return t.header, nil
 }
 
@@ -258,33 +265,10 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 	}()
 
 	// skip response header
-	t.resOnce.Do(func() {
-		ctx := context.Background()
-		_, _, err = t.conn.Reader(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "failed to read response header")
-			return
-		}
-
-		_, msg, err := t.conn.Reader(ctx)
-		if err != nil {
-			err = errors.Wrap(err, "failed to read response header")
-			return
-		}
-
-		h := make(http.Header)
-		s := bufio.NewScanner(msg)
-		for s.Scan() {
-			t := s.Text()
-			i := strings.Index(t, ": ")
-			if i == -1 {
-				continue
-			}
-			k := strings.ToLower(t[:i])
-			h.Add(k, t[i+2:])
-		}
-		t.header = h
-	})
+	t.resOnce.Do(t.receiveHeaders)
+	if t.receiveHeaderErr != nil {
+		return nil, t.receiveHeaderErr
+	}
 
 	var buf bytes.Buffer
 	var b []byte
@@ -322,6 +306,35 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 	return res, nil
 }
 
+func (t *webSocketTransport) receiveHeaders() {
+	ctx := context.Background()
+	var err error
+	_, _, err = t.conn.Read(ctx)
+	if err != nil {
+		t.receiveHeaderErr = errors.Wrap(err, "failed to read response header")
+		return
+	}
+
+	_, msg, err := t.conn.Reader(ctx)
+	if err != nil {
+		t.receiveHeaderErr = errors.Wrap(err, "failed to read response header")
+		return
+	}
+
+	h := make(http.Header)
+	s := bufio.NewScanner(msg)
+	for s.Scan() {
+		t := s.Text()
+		i := strings.Index(t, ": ")
+		if i == -1 {
+			continue
+		}
+		k := strings.ToLower(t[:i])
+		h.Add(k, t[i+2:])
+	}
+	t.header = h
+}
+
 func (t *webSocketTransport) CloseSend() error {
 	// 0x01 means the finish send frame.
 	// ref. transports/websocket/websocket.ts
@@ -330,8 +343,10 @@ func (t *webSocketTransport) CloseSend() error {
 }
 
 func (t *webSocketTransport) Close() error {
+	if t.closed {
+		return nil
+	}
 	// Send the close message.
-
 	err := t.conn.Close(websocket.StatusNormalClosure, "")
 	if err != nil {
 		return err
@@ -354,6 +369,8 @@ var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientS
 	var conn *websocket.Conn
 	dialer := &websocket.DialOptions{}
 	dialer.HTTPClient = http.DefaultClient
+	dialer.HTTPHeader = h
+	dialer.Subprotocols = []string{"grpc-websockets"}
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
