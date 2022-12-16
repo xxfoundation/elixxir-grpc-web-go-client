@@ -376,17 +376,22 @@ var NewWSStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketSt
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
-		certPool := x509.NewCertPool()
-		decoded, _ := pem.Decode(opts.TLSCertificate)
-		if decoded == nil {
-			panic("failed to decode cert")
+		tlsConf := &tls.Config{}
+		if opts.TLSCertificate != nil {
+			certPool := x509.NewCertPool()
+			decoded, _ := pem.Decode(opts.TLSCertificate)
+			if decoded == nil {
+				panic("failed to decode cert")
+			}
+			cert, err := x509.ParseCertificate(decoded.Bytes)
+			if err != nil {
+				panic(err)
+			}
+			certPool.AddCert(cert)
+			tlsConf.RootCAs = certPool
+			tlsConf.ServerName = cert.DNSNames[0]
 		}
-		cert, err := x509.ParseCertificate(decoded.Bytes)
-		if err != nil {
-			panic(err)
-		}
-		certPool.AddCert(cert)
-		tlsConf := &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
+
 		tlsConf.InsecureSkipVerify = opts.TlsInsecureSkipVerify
 
 		dialer.HTTPClient.Transport = &http.Transport{

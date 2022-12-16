@@ -122,7 +122,10 @@ func (c *ClientConn) NewClientStream(desc *grpc.StreamDesc, method string, opts 
 		return nil, errors.New("not a client stream RPC")
 	}
 	co := c.applyCallOptions(opts)
-	tr, err := transport.NewWSStream(c.host, method, &transport.ConnectOptions{WithTLS: !c.dialOptions.insecure})
+	tr, err := transport.NewWSStream(c.host, method,
+		&transport.ConnectOptions{WithTLS: !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new transport stream")
 	}
@@ -137,7 +140,10 @@ func (c *ClientConn) NewServerStream(desc *grpc.StreamDesc, method string, opts 
 	if !desc.ServerStreams {
 		return nil, errors.New("not a server stream RPC")
 	}
-	tr, err := transport.NewWSStream(c.host, method, &transport.ConnectOptions{WithTLS: !c.dialOptions.insecure})
+	tr, err := transport.NewWSStream(c.host, method,
+		&transport.ConnectOptions{WithTLS: !c.dialOptions.insecure,
+			TLSCertificate:        c.dialOptions.tlsCertificate,
+			TlsInsecureSkipVerify: c.dialOptions.tlsInsecureVerification})
 	if err != nil {
 		return nil, err
 	}
