@@ -662,12 +662,12 @@ func TestBidiStream(t *testing.T) {
 	}
 }
 
-func injectClientStreamTransport(t *testing.T, tr transport.ClientStreamTransport) {
+func injectClientStreamTransport(t *testing.T, tr transport.WebsocketStreamingTransport) {
 	old := transport.NewClientStream
 	t.Cleanup(func() {
 		transport.NewClientStream = old
 	})
-	transport.NewClientStream = func(string, string, *transport.ConnectOptions) (transport.ClientStreamTransport, error) {
+	transport.NewClientStream = func(string, string, *transport.ConnectOptions) (transport.WebsocketStreamingTransport, error) {
 		return tr, nil
 	}
 }

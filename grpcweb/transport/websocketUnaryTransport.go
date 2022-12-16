@@ -19,12 +19,9 @@ import (
 	"sync"
 )
 
-// webSocketTransport is a stream transport implementation.
-//
-// Currently, gRPC-Web specification does not support client streaming. (https://github.com/improbable-eng/grpc-web#client-side-streaming)
-// webSocketTransport supports improbable-eng/grpc-web's own implementation.
-//
-// spec: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md
+// webSocketUnaryTransport was written as an intermediary step in allowing
+// server streams to run over websockets.  It is not currently in use, but
+// remains in the codebase as an example/model
 type webSocketUnaryTransport struct {
 	host     string
 	endpoint string

@@ -159,7 +159,7 @@ var NewUnary = func(host string, opts *ConnectOptions) UnaryTransport {
 	}
 }
 
-type ClientStreamTransport interface {
+type WebsocketStreamingTransport interface {
 	Header() (http.Header, error)
 	Trailer() http.Header
 
@@ -200,6 +200,7 @@ type webSocketTransport struct {
 }
 
 func (t *webSocketTransport) Header() (http.Header, error) {
+	// Try to read headers if we haven't already
 	if t.header == nil {
 		t.resOnce.Do(t.receiveHeaders)
 	}
@@ -306,6 +307,8 @@ func (t *webSocketTransport) Receive(context.Context) (_ io.ReadCloser, err erro
 	return res, nil
 }
 
+// receiveHeaders should be called through resOnce.Do.
+// It is used to retreive streaming headers if they have not been read.
 func (t *webSocketTransport) receiveHeaders() {
 	ctx := context.Background()
 	var err error
@@ -338,8 +341,7 @@ func (t *webSocketTransport) receiveHeaders() {
 func (t *webSocketTransport) CloseSend() error {
 	// 0x01 means the finish send frame.
 	// ref. transports/websocket/websocket.ts
-	t.writeMessage(int(websocket.MessageBinary), []byte{0x01})
-	return nil
+	return t.writeMessage(int(websocket.MessageBinary), []byte{0x01})
 }
 
 func (t *webSocketTransport) Close() error {
@@ -352,7 +354,6 @@ func (t *webSocketTransport) Close() error {
 		return err
 	}
 	t.closed = true
-	// Close the WebSocket connection.
 	return nil
 }
 
@@ -362,14 +363,15 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 	return t.conn.Write(context.Background(), websocket.MessageType(msg), b)
 }
 
-var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (ClientStreamTransport, error) {
-	// TODO: WebSocket over TLS support.
+var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketStreamingTransport, error) {
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
 	dialer := &websocket.DialOptions{}
 	dialer.HTTPClient = http.DefaultClient
+	// Set weebsocket dialer http header
 	dialer.HTTPHeader = h
+	// Set websocket dialer subprotocol
 	dialer.Subprotocols = []string{"grpc-websockets"}
 	scheme := "ws"
 	if opts.WithTLS {

@@ -32,7 +32,7 @@ type ClientStream interface {
 
 type clientStream struct {
 	endpoint    string
-	transport   transport.ClientStreamTransport
+	transport   transport.WebsocketStreamingTransport
 	callOptions *callOptions
 
 	trailersOnly, closed atomic.Bool
@@ -197,7 +197,7 @@ type ServerStream interface {
 
 type serverStream struct {
 	endpoint    string
-	transport   transport.ClientStreamTransport
+	transport   transport.WebsocketStreamingTransport
 	resStream   io.Reader
 	callOptions *callOptions
 
