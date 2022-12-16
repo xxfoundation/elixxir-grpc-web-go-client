@@ -353,6 +353,7 @@ func (s *bidiStream) Receive(ctx context.Context, res interface{}) error {
 		// Try to extract *status.Status from headers.
 		return statusFromHeader(trailer).Err()
 	}
+
 	if err != nil {
 		return errors.Wrap(err, "failed to receive the response")
 	}

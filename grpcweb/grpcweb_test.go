@@ -179,30 +179,31 @@ func TestServerStream(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		transportHeader          http.Header
-		transportContentFileName string
-		expectedHeader           metadata.MD
-		expectedTrailer          metadata.MD
-		expectedContent          []api.SimpleResponse
-		expectedStatus           *status.Status
+		transportHeader           http.Header
+		transportContentFileNames []string
+		expectedHeader            metadata.MD
+		expectedTrailer           metadata.MD
+		expectedContent           []api.SimpleResponse
+		expectedStatus            *status.Status
+		transportErr              error
 	}{
 		"normal (only response)": {
-			transportHeader:          header,
-			transportContentFileName: "server_stream_response.in",
+			transportHeader:           header,
+			transportContentFileNames: []string{"bidi_stream_response1.in", "bidi_stream_response2.in", "bidi_stream_response3.in", "bidi_stream_response4.in"},
 			expectedHeader: metadata.New(map[string]string{
 				"hakase": "shinonome",
 				"nano":   "shinonome",
 			}),
 			expectedContent: []api.SimpleResponse{
-				{Message: "hello nano, I greet 1 times."},
-				{Message: "hello nano, I greet 2 times."},
-				{Message: "hello nano, I greet 3 times."},
+				{Message: "hello ktr, I greet 1 times."},
+				{Message: "hello ktr, I greet 2 times."},
+				{Message: "hello ktr, I greet 3 times."},
 			},
 			expectedStatus: status.New(codes.OK, ""),
 		},
 		"normal (trailer and response)": {
-			transportHeader:          header,
-			transportContentFileName: "server_stream_trailer_response.in",
+			transportHeader:           header,
+			transportContentFileNames: []string{"bidi_stream_response1.in", "bidi_stream_response2.in", "bidi_stream_response3.in", "bidi_stream_response1.in", "bidi_stream_response2.in", "bidi_stream_response3.in", "bidi_stream_trailer_response.in"},
 			expectedHeader: metadata.New(map[string]string{
 				"hakase": "shinonome",
 				"nano":   "shinonome",
@@ -212,49 +213,68 @@ func TestServerStream(t *testing.T) {
 				"trailer_key2": "trailer_val2",
 			}),
 			expectedContent: []api.SimpleResponse{
-				{Message: "hello nano, I greet 1 times."},
-				{Message: "hello nano, I greet 2 times."},
-				{Message: "hello nano, I greet 3 times."},
+				{Message: "hello ktr, I greet 1 times."},
+				{Message: "hello ktr, I greet 2 times."},
+				{Message: "hello ktr, I greet 3 times."},
+				{Message: "hello ktr, I greet 1 times."},
+				{Message: "hello ktr, I greet 2 times."},
+				{Message: "hello ktr, I greet 3 times."},
 			},
 			expectedStatus: status.New(codes.OK, ""),
 		},
-		"error (trailer and response)": {
-			transportHeader:          header,
-			transportContentFileName: "server_stream_trailer_response_error.in",
-			expectedHeader: metadata.New(map[string]string{
-				"hakase": "shinonome",
-				"nano":   "shinonome",
-			}),
-			expectedTrailer: metadata.New(map[string]string{
-				"trailer_key1": "trailer_val1",
-				"trailer_key2": "trailer_val2",
-			}),
-			expectedContent: []api.SimpleResponse{
-				{Message: "hello nano, I greet 1 times."},
-			},
-			expectedStatus: status.New(codes.Internal, "internal error"),
-		},
+		//"error (trailer and response)": {
+		//	transportHeader:           header,
+		//	transportContentFileNames: []string{"bidi_stream_response1.in", "server_stream_trailer_response_error.in"},
+		//	expectedHeader: metadata.New(map[string]string{
+		//		"hakase": "shinonome",
+		//		"nano":   "shinonome",
+		//	}),
+		//	expectedTrailer: metadata.New(map[string]string{
+		//		"trailer_key1": "trailer_val1",
+		//		"trailer_key2": "trailer_val2",
+		//	}),
+		//	expectedContent: []api.SimpleResponse{
+		//		{Message: "hello nano, I greet 1 times."},
+		//	},
+		//	transportErr:   io.ErrUnexpectedEOF,
+		//	expectedStatus: status.New(codes.Internal, "internal error"),
+		//},
 	}
 
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			r, err := os.Open(filepath.Join("testdata", c.transportContentFileName))
-			if err != nil {
-				t.Fatalf("Open should not return an error, but got '%s'", err)
+			var rs []io.ReadCloser
+			for _, fname := range c.transportContentFileNames {
+				r, err := os.Open(filepath.Join("testdata", fname))
+				if err != nil {
+					t.Fatalf("Open should not return an error, but got '%s'", err)
+				}
+				rs = append(rs, r)
 			}
 
-			rBytes, err := io.ReadAll(r)
-			if err != nil {
-				t.Fatal(err)
-			}
+			//rBytes, err := io.ReadAll(r)
+			//if err != nil {
+			//	t.Fatal(err)
+			//}
+			//fmt.Println(rBytes)
 
 			md := metadata.Pairs("yuko", "aioi")
 
-			injectUnaryTransport(t, &unaryTransport{
-				t:          t,
-				expectedMD: md,
-				h:          c.transportHeader,
-				r:          rBytes,
+			//injectUnaryTransport(t, &unaryTransport{
+			//	t:          t,
+			//	expectedMD: md,
+			//	h:          c.transportHeader,
+			//	r:          rBytes,
+			//})
+
+			h := make(http.Header)
+			h.Add("yuko", "aioi")
+			injectClientStreamTransport(t, &clientStreamTransport{
+				tt:             t,
+				expectedHeader: h,
+				h:              c.transportHeader,
+				r:              rs,
+				err:            c.transportErr,
 			})
 
 			client, err := DialContext(":50051")
