@@ -663,11 +663,11 @@ func TestBidiStream(t *testing.T) {
 }
 
 func injectClientStreamTransport(t *testing.T, tr transport.WebsocketStreamingTransport) {
-	old := transport.NewClientStream
+	old := transport.NewWSStream
 	t.Cleanup(func() {
-		transport.NewClientStream = old
+		transport.NewWSStream = old
 	})
-	transport.NewClientStream = func(string, string, *transport.ConnectOptions) (transport.WebsocketStreamingTransport, error) {
+	transport.NewWSStream = func(string, string, *transport.ConnectOptions) (transport.WebsocketStreamingTransport, error) {
 		return tr, nil
 	}
 }

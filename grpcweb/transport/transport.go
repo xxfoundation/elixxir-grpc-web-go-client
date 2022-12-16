@@ -363,7 +363,7 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 	return t.conn.Write(context.Background(), websocket.MessageType(msg), b)
 }
 
-var NewClientStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketStreamingTransport, error) {
+var NewWSStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketStreamingTransport, error) {
 	h := http.Header{}
 	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
