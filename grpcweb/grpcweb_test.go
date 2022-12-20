@@ -2,6 +2,7 @@ package grpcweb
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net/http"
@@ -25,6 +26,11 @@ type unaryTransport struct {
 	h          http.Header
 	r          []byte
 	err        error
+}
+
+func (t *unaryTransport) GetReceivedCertificate() (*x509.Certificate, error) {
+	panic("UNIMPLEMENTED")
+	return nil, nil
 }
 
 func (t *unaryTransport) Header() http.Header {

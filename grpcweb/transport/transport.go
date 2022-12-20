@@ -25,14 +25,17 @@ import (
 type UnaryTransport interface {
 	Header() http.Header
 	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
+	GetReceivedCertificate() (*x509.Certificate, error)
 	Close() error
 }
 
 type httpTransport struct {
-	host       string
-	client     *http.Client
-	clientLock *sync.RWMutex
-	opts       *ConnectOptions
+	host             string
+	client           *http.Client
+	clientLock       *sync.RWMutex
+	opts             *ConnectOptions
+	receivedCertLock sync.RWMutex
+	receivedCert     *x509.Certificate
 
 	header http.Header
 }
@@ -96,7 +99,35 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		}
 	}
 
+	if res.TLS != nil {
+		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
+			serverCert := res.TLS.PeerCertificates[0]
+			t.receivedCertLock.RLock()
+			if !certsEqual(t.receivedCert, serverCert) {
+				t.receivedCertLock.RUnlock()
+				t.receivedCertLock.Lock()
+				t.receivedCert = serverCert
+				t.receivedCertLock.Unlock()
+				t.receivedCertLock.RLock()
+			}
+			t.receivedCertLock.RUnlock()
+		}
+	}
+
 	return res.Header, respBody, nil
+}
+
+func (t *httpTransport) GetReceivedCertificate() (*x509.Certificate, error) {
+	t.receivedCertLock.RLock()
+	defer t.receivedCertLock.RUnlock()
+	if t.receivedCert == nil {
+		return nil, errors.New("http transport has not yet received a tls certificate")
+	}
+	return t.receivedCert, nil
+}
+
+func certsEqual(c1, c2 *x509.Certificate) bool {
+	return c1.Issuer.String() == c2.Issuer.String() && c1.SerialNumber == c2.SerialNumber
 }
 
 // Close the httpTransport object
