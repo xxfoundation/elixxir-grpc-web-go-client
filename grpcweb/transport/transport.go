@@ -103,7 +103,7 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
 			serverCert := res.TLS.PeerCertificates[0]
 			t.receivedCertLock.RLock()
-			if !certsEqual(t.receivedCert, serverCert) {
+			if t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert) {
 				t.receivedCertLock.RUnlock()
 				t.receivedCertLock.Lock()
 				t.receivedCert = serverCert
