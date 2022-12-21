@@ -28,7 +28,7 @@ type unaryTransport struct {
 	err        error
 }
 
-func (t *unaryTransport) GetReceivedCertificate() (*x509.Certificate, error) {
+func (t *unaryTransport) GetRemoteCertificate() (*x509.Certificate, error) {
 	panic("UNIMPLEMENTED")
 	return nil, nil
 }

@@ -26,7 +26,7 @@ import (
 type UnaryTransport interface {
 	Header() http.Header
 	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
-	GetReceivedCertificate() (*x509.Certificate, error)
+	GetRemoteCertificate() (*x509.Certificate, error)
 	Close() error
 }
 
@@ -109,16 +109,12 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	return res.Header, respBody, nil
 }
 
-func (t *httpTransport) GetReceivedCertificate() (*x509.Certificate, error) {
+func (t *httpTransport) GetRemoteCertificate() (*x509.Certificate, error) {
 	receivedCert := t.receivedCertAtomic.Load()
 	if receivedCert == nil {
 		return nil, errors.New("http transport has not yet received a tls certificate")
 	}
 	return receivedCert.(*x509.Certificate), nil
-}
-
-func certsEqual(c1, c2 *x509.Certificate) bool {
-	return c1.Issuer.String() == c2.Issuer.String() && c1.SerialNumber == c2.SerialNumber
 }
 
 // Close the httpTransport object
