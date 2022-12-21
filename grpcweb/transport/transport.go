@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -30,12 +31,13 @@ type UnaryTransport interface {
 }
 
 type httpTransport struct {
-	host             string
-	client           *http.Client
-	clientLock       *sync.RWMutex
-	opts             *ConnectOptions
-	receivedCertLock sync.RWMutex
-	receivedCert     *x509.Certificate
+	host               string
+	client             *http.Client
+	clientLock         *sync.RWMutex
+	opts               *ConnectOptions
+	receivedCertAtomic atomic.Value
+	receivedCertLock   sync.RWMutex
+	receivedCert       *x509.Certificate
 
 	header http.Header
 }
@@ -102,16 +104,14 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	if res.TLS != nil {
 		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
 			serverCert := res.TLS.PeerCertificates[0]
-			t.receivedCertLock.RLock()
-			newCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
-			t.receivedCertLock.RUnlock()
-			if newCert {
-				t.receivedCertLock.Lock()
-				stillNewCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
-				if stillNewCert {
-					t.receivedCert = serverCert
+			receivedCert := t.receivedCertAtomic.Load().(*x509.Certificate)
+			newCert := receivedCert == nil || !certsEqual(receivedCert, serverCert)
+			for swapped := false; !swapped && newCert; {
+				swapped = t.receivedCertAtomic.CompareAndSwap(receivedCert, serverCert)
+				if !swapped {
+					receivedCert = t.receivedCertAtomic.Load().(*x509.Certificate)
+					newCert = receivedCert == nil || !certsEqual(receivedCert, serverCert)
 				}
-				t.receivedCertLock.Unlock()
 			}
 		}
 	}
