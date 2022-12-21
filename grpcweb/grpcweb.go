@@ -182,8 +182,8 @@ func (c *ClientConn) applyCallOptions(opts []CallOption) *callOptions {
 	return &callOptions
 }
 
-func (c *ClientConn) GetReceivedCertificate() (*x509.Certificate, error) {
-	return c.transport.GetReceivedCertificate()
+func (c *ClientConn) GetRemoteCertificate() (*x509.Certificate, error) {
+	return c.transport.GetRemoteCertificate()
 }
 
 // copied from rpc_util.go#msgHeader

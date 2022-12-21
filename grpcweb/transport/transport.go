@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,17 +26,16 @@ import (
 type UnaryTransport interface {
 	Header() http.Header
 	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
-	GetReceivedCertificate() (*x509.Certificate, error)
+	GetRemoteCertificate() (*x509.Certificate, error)
 	Close() error
 }
 
 type httpTransport struct {
-	host             string
-	client           *http.Client
-	clientLock       *sync.RWMutex
-	opts             *ConnectOptions
-	receivedCertLock sync.RWMutex
-	receivedCert     *x509.Certificate
+	host               string
+	client             *http.Client
+	clientLock         *sync.RWMutex
+	opts               *ConnectOptions
+	receivedCertAtomic atomic.Value
 
 	header http.Header
 }
@@ -102,34 +102,19 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	if res.TLS != nil {
 		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
 			serverCert := res.TLS.PeerCertificates[0]
-			t.receivedCertLock.RLock()
-			newCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
-			t.receivedCertLock.RUnlock()
-			if newCert {
-				t.receivedCertLock.Lock()
-				stillNewCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
-				if stillNewCert {
-					t.receivedCert = serverCert
-				}
-				t.receivedCertLock.Unlock()
-			}
+			t.receivedCertAtomic.Store(serverCert)
 		}
 	}
 
 	return res.Header, respBody, nil
 }
 
-func (t *httpTransport) GetReceivedCertificate() (*x509.Certificate, error) {
-	t.receivedCertLock.RLock()
-	defer t.receivedCertLock.RUnlock()
-	if t.receivedCert == nil {
+func (t *httpTransport) GetRemoteCertificate() (*x509.Certificate, error) {
+	receivedCert := t.receivedCertAtomic.Load()
+	if receivedCert == nil {
 		return nil, errors.New("http transport has not yet received a tls certificate")
 	}
-	return t.receivedCert, nil
-}
-
-func certsEqual(c1, c2 *x509.Certificate) bool {
-	return c1.Issuer.String() == c2.Issuer.String() && c1.SerialNumber == c2.SerialNumber
+	return receivedCert.(*x509.Certificate), nil
 }
 
 // Close the httpTransport object
