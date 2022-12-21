@@ -36,8 +36,6 @@ type httpTransport struct {
 	clientLock         *sync.RWMutex
 	opts               *ConnectOptions
 	receivedCertAtomic atomic.Value
-	receivedCertLock   sync.RWMutex
-	receivedCert       *x509.Certificate
 
 	header http.Header
 }
@@ -120,12 +118,11 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 }
 
 func (t *httpTransport) GetReceivedCertificate() (*x509.Certificate, error) {
-	t.receivedCertLock.RLock()
-	defer t.receivedCertLock.RUnlock()
-	if t.receivedCert == nil {
+	receivedCert := t.receivedCertAtomic.Load()
+	if receivedCert == nil {
 		return nil, errors.New("http transport has not yet received a tls certificate")
 	}
-	return t.receivedCert, nil
+	return receivedCert.(*x509.Certificate), nil
 }
 
 func certsEqual(c1, c2 *x509.Certificate) bool {
