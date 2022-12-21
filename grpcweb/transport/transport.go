@@ -102,15 +102,7 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 	if res.TLS != nil {
 		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
 			serverCert := res.TLS.PeerCertificates[0]
-			receivedCert := t.receivedCertAtomic.Load()
-			newCert := receivedCert == nil || !certsEqual(receivedCert.(*x509.Certificate), serverCert)
-			for swapped := false; !swapped && newCert; {
-				swapped = t.receivedCertAtomic.CompareAndSwap(receivedCert, serverCert)
-				if !swapped {
-					receivedCert = t.receivedCertAtomic.Load()
-					newCert = receivedCert == nil || !certsEqual(receivedCert.(*x509.Certificate), serverCert)
-				}
-			}
+			t.receivedCertAtomic.Store(serverCert)
 		}
 	}
 
