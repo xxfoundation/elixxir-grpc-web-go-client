@@ -103,14 +103,16 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
 			serverCert := res.TLS.PeerCertificates[0]
 			t.receivedCertLock.RLock()
-			if t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert) {
-				t.receivedCertLock.RUnlock()
-				t.receivedCertLock.Lock()
-				t.receivedCert = serverCert
-				t.receivedCertLock.Unlock()
-				t.receivedCertLock.RLock()
-			}
+			newCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
 			t.receivedCertLock.RUnlock()
+			if newCert {
+				t.receivedCertLock.Lock()
+				stillNewCert := t.receivedCert == nil || !certsEqual(t.receivedCert, serverCert)
+				if stillNewCert {
+					t.receivedCert = serverCert
+				}
+				t.receivedCertLock.Unlock()
+			}
 		}
 	}
 
