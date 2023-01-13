@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -25,14 +26,16 @@ import (
 type UnaryTransport interface {
 	Header() http.Header
 	Send(ctx context.Context, endpoint, contentType string, body io.Reader) (http.Header, []byte, error)
+	GetRemoteCertificate() (*x509.Certificate, error)
 	Close() error
 }
 
 type httpTransport struct {
-	host       string
-	client     *http.Client
-	clientLock *sync.RWMutex
-	opts       *ConnectOptions
+	host               string
+	client             *http.Client
+	clientLock         *sync.RWMutex
+	opts               *ConnectOptions
+	receivedCertAtomic atomic.Value
 
 	header http.Header
 }
@@ -96,7 +99,22 @@ func (t *httpTransport) Send(ctx context.Context, endpoint, contentType string, 
 		}
 	}
 
+	if res.TLS != nil {
+		if res.TLS.PeerCertificates != nil && len(res.TLS.PeerCertificates) > 0 {
+			serverCert := res.TLS.PeerCertificates[0]
+			t.receivedCertAtomic.Store(serverCert)
+		}
+	}
+
 	return res.Header, respBody, nil
+}
+
+func (t *httpTransport) GetRemoteCertificate() (*x509.Certificate, error) {
+	receivedCert := t.receivedCertAtomic.Load()
+	if receivedCert == nil {
+		return nil, errors.New("http transport has not yet received a tls certificate")
+	}
+	return receivedCert.(*x509.Certificate), nil
 }
 
 // Close the httpTransport object

@@ -3,6 +3,7 @@ package grpcweb
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/binary"
 	"io"
 	"net/http"
@@ -186,6 +187,10 @@ func (c *ClientConn) applyCallOptions(opts []CallOption) *callOptions {
 		o(&callOptions)
 	}
 	return &callOptions
+}
+
+func (c *ClientConn) GetRemoteCertificate() (*x509.Certificate, error) {
+	return c.transport.GetRemoteCertificate()
 }
 
 // copied from rpc_util.go#msgHeader
