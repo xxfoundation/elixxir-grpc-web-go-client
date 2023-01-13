@@ -54,6 +54,10 @@ func (t *webSocketUnaryTransport) SetRequestHeader(h http.Header) {
 	t.reqHeader = h
 }
 
+func (t *webSocketUnaryTransport) GetRemoteCertificate() (*x509.Certificate, error) {
+	return nil, nil
+}
+
 func (t *webSocketUnaryTransport) Send(ctx context.Context, _, _ string, body io.Reader) (http.Header, []byte, error) {
 	if t.closed {
 		return nil, nil, io.EOF
