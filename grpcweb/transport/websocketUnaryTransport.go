@@ -242,14 +242,8 @@ func (t *webSocketUnaryTransport) writeMessage(msg int, b []byte) error {
 }
 
 var NewWSUT = func(host, endpoint string, opts *ConnectOptions) (UnaryTransport, error) {
-	// TODO: WebSocket over TLS support.
-	h := http.Header{}
-	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
-	dialer := &websocket.DialOptions{}
-	dialer.HTTPClient = http.DefaultClient
-	dialer.HTTPHeader = h
-	dialer.Subprotocols = []string{"grpc-websockets"}
+	dialer := initWsDialer()
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"

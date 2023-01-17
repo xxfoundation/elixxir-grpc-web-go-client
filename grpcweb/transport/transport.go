@@ -382,15 +382,8 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 }
 
 var NewWSStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketStreamingTransport, error) {
-	h := http.Header{}
-	h.Set("Sec-WebSocket-Protocol", "grpc-websockets")
 	var conn *websocket.Conn
-	dialer := &websocket.DialOptions{}
-	dialer.HTTPClient = http.DefaultClient
-	// Set weebsocket dialer http header
-	dialer.HTTPHeader = h
-	// Set websocket dialer subprotocol
-	dialer.Subprotocols = []string{"grpc-websockets"}
+	dialer := initWsDialer()
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
