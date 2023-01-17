@@ -3,9 +3,7 @@ package transport
 import (
 	"bufio"
 	"bytes"
-	"crypto/tls"
 	"crypto/x509"
-	"encoding/pem"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"io"
@@ -243,27 +241,10 @@ func (t *webSocketUnaryTransport) writeMessage(msg int, b []byte) error {
 
 var NewWSUT = func(host, endpoint string, opts *ConnectOptions) (UnaryTransport, error) {
 	var conn *websocket.Conn
-	dialer := initWsDialer()
+	dialer := initWsDialer(opts)
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
-		certPool := x509.NewCertPool()
-		decoded, _ := pem.Decode(opts.TLSCertificate)
-		if decoded == nil {
-			panic("failed to decode cert")
-		}
-		cert, err := x509.ParseCertificate(decoded.Bytes)
-		if err != nil {
-			panic(err)
-		}
-		certPool.AddCert(cert)
-		tlsConf := &tls.Config{RootCAs: certPool, ServerName: cert.DNSNames[0]}
-		tlsConf.InsecureSkipVerify = opts.TlsInsecureSkipVerify
-
-		dialer.HTTPClient.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
-		}
-
 	}
 	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
 	conn, _, err := websocket.Dial(context.Background(), u.String(), dialer)

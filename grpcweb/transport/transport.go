@@ -383,32 +383,10 @@ func (t *webSocketTransport) writeMessage(msg int, b []byte) error {
 
 var NewWSStream = func(host, endpoint string, opts *ConnectOptions) (WebsocketStreamingTransport, error) {
 	var conn *websocket.Conn
-	dialer := initWsDialer()
+	dialer := initWsDialer(opts)
 	scheme := "ws"
 	if opts.WithTLS {
 		scheme = "wss"
-		tlsConf := &tls.Config{}
-		if opts.TLSCertificate != nil {
-			certPool := x509.NewCertPool()
-			decoded, _ := pem.Decode(opts.TLSCertificate)
-			if decoded == nil {
-				panic("failed to decode cert")
-			}
-			cert, err := x509.ParseCertificate(decoded.Bytes)
-			if err != nil {
-				panic(err)
-			}
-			certPool.AddCert(cert)
-			tlsConf.RootCAs = certPool
-			tlsConf.ServerName = cert.DNSNames[0]
-		}
-
-		tlsConf.InsecureSkipVerify = opts.TlsInsecureSkipVerify
-
-		dialer.HTTPClient.Transport = &http.Transport{
-			TLSClientConfig: tlsConf,
-		}
-
 	}
 	u := url.URL{Scheme: scheme, Host: host, Path: endpoint}
 	conn, _, err := websocket.Dial(context.Background(), u.String(), dialer)
